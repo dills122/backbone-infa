@@ -26,7 +26,7 @@ variable "ssh_public_key" {
 }
 variable "umami_subdomain" {
   type    = string
-  default = "api"
+  default = "umami"
 }
 variable "domain_name" {
   type = string
