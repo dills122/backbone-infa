@@ -1,0 +1,11 @@
+.git
+.gitignore
+node_modules/
+temp/
+prod/
+.github/
+pnpm-local/
+pnpm-store/
+*.log
+.vscode/
+infastructure/
