@@ -1,6 +1,6 @@
 #!/bin/bash
 
-domain="wheremycageat.com"
+domain="dsteele.dev"
 umami_sub_domain="umami"
 ssl_email="dylansteele57@gmail.com"
 
