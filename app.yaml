@@ -1,0 +1,37 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+groups:
+  - ubuntu: [root, sys]
+  - backbone
+
+packages:
+  - git
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+
+# Add users to the system. Users are added after groups are added.
+users:
+  - default
+  - name: terraform
+    gecos: terraform
+    shell: /bin/bash
+    primary_group: backbone
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin, docker
+    lock_passwd: false
+    ssh-authorized-keys:
+      - ${pub_key}
+
+runcmd:
+  - /usr/bin/git clone https://github.com/dills122/backbone-infa.git backbone-src
+  - sudo ufw allow 'Nginx Full'
+  - /usr/bin/bash ./backbone-src/scripts/certbot.sh
+  - /usr/bin/bash ./backbone-src/scripts/umami-setup.sh
+  - sudo systemctl restart nginx
+  - /usr/bin/docker update --restart unless-stopped $(docker ps -q)
+
+final_message: "The system is finally up, after $UPTIME seconds"
