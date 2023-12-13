@@ -29,6 +29,11 @@ users:
 runcmd:
   - /usr/bin/git clone https://github.com/dills122/backbone-infa.git backbone-src
   - sudo ufw allow 'Nginx Full'
+  - sudo ufw deny 6379 # Lockdown redis port from the outside world
+  - sudo wget -O /usr/local/bin/ufw-docker https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+  - sudo chmod +x /usr/local/bin/ufw-docker
+  - sudo ufw-docker install
+  - sudo systemctl restart ufw
   - /usr/bin/bash ./backbone-src/scripts/certbot.sh
   - /usr/bin/bash ./backbone-src/scripts/umami-setup.sh
   - sudo systemctl restart nginx
