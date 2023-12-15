@@ -1,5 +1,7 @@
 #!/bin/bash
 
+/usr/bin/bash certbot.sh dsteele.dev umami
+
 git clone https://github.com/mikecao/umami.git
 
 pushd umami
