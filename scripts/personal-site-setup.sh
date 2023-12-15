@@ -4,11 +4,11 @@
 
 pushd dsteele.dev
 
-docker-compose up "build"
+docker compose up "build" # build process not working properly, might need to update repo
 
-mkdir /var/html/dsteele.dev
+mkdir /var/www/html/dsteele.dev
 
-cp ./_site/* /var/html/dsteele.dev
+cp ./_site/* /var/www/html/dsteele.dev
 
 /usr/bin/bash certbot.sh dsteele.dev
 

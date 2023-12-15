@@ -13,6 +13,6 @@ yarn install
 echo "DATABASE_URL=postgresql://main:Ba21tedao23094!@localhost:5432/mydb" >.env
 
 docker pull ghcr.io/mikecao/umami:postgresql-latest
-docker-compose up -d
+docker compose up -d
 
 popd
