@@ -4,10 +4,10 @@ domain="dsteele.dev"
 umami_sub_domain="umami"
 ssl_email="dylansteele57@gmail.com"
 
-#TODO fix issue with nginx config/ cert install; cant have listen 80 and 443 in same server, certbot doesnt remove the 80
-sudo rm -rf /etc/nginx/conf.d/* && sudo rm -rf /etc/nginx/sites-enabled/default
+# Need to update the naming to the url of site ex. umami.dsteele.dev
+sudo rm -rf /etc/nginx/conf.d/* && sudo rm -rf /etc/nginx/sites-available/*
 # Copy Nginx config files
-sudo cp ~/backbone-src/.docker/nginx/conf.d/prod/* /etc/nginx/sites-enabled/
+sudo cp ~/backbone-src/.docker/nginx/conf.d/prod/* /etc/nginx/sites-available/
 
 sudo nginx -t
 

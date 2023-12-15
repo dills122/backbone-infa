@@ -1,11 +1,3 @@
-data "template_file" "userdata" {
-  template = file("${path.module}/app.yaml")
-
-  vars = {
-    pub_key = var.ssh_public_key != "default" ? var.ssh_public_key : file(var.ssh_public_key_path)
-  }
-}
-
 # Setup a DO droplet
 resource "digitalocean_droplet" "backbone_server_1" {
   image  = var.droplet_image
@@ -15,7 +7,9 @@ resource "digitalocean_droplet" "backbone_server_1" {
   ssh_keys = [
     var.ssh_key_fingerprint
   ]
-  user_data = data.template_file.userdata.rendered
+  user_data = templatefile("${path.module}/app.yaml", {
+    pub_key = var.ssh_public_key != "default" ? var.ssh_public_key : file(var.ssh_public_key_path)
+  })
 }
 
 ################################################################################
