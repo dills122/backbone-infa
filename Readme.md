@@ -44,7 +44,7 @@ sh ssh.sh email@email.com
 SSH into the newly created droplet with your new SSH key
 
 ```bash
-ssh root@IP_ADDRESS -i ~/.ssh/do_id_rsa.pub
+ssh root@IP_ADDRESS -i ~/.ssh/do_id_ed25519.pub
 ```
 
 #### Certbot Info
