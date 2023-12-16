@@ -29,6 +29,7 @@ users:
 
 runcmd:
   - /usr/bin/git clone https://github.com/dills122/backbone-infa.git backbone-src
+  # - sudo rm -rf /etc/nginx/conf.d/* && sudo rm -rf /etc/nginx/sites-available/* # remove all default files
   - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
   - export NVM_DIR="$HOME/.nvm"
   - [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
@@ -40,8 +41,8 @@ runcmd:
   - sudo chmod +x /usr/local/bin/ufw-docker
   - sudo ufw-docker install
   - sudo systemctl restart ufw
-  - /usr/bin/bash ./backbone-src/scripts/certbot.sh
   - /usr/bin/bash ./backbone-src/scripts/umami-setup.sh
+  - /usr/bin/bash ./backbone-src/scripts/personal-site-setup.sh
   - sudo systemctl restart nginx
   - /usr/bin/docker update --restart unless-stopped $(docker ps -q)
   - sudo echo "0 12 * * * terraform /usr/bin/certbot renew --quiet" >/etc/cron.d/certbot_renew
