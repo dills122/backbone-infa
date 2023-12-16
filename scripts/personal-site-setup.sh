@@ -4,7 +4,7 @@ remote_path="/var/www/html/dsteele.dev/"
 
 /usr/bin/git clone https://github.com/dills122/dsteele.dev.git
 
-pushd dsteele.dev
+cd ./dsteele.dev
 
 git pull
 
@@ -14,6 +14,6 @@ mkdir $remote_path
 
 /usr/bin/bash ~/backbone-src/scripts/certbot.sh dsteele.dev
 
-popd
+cd ..
 
 sudo systemctl restart nginx
