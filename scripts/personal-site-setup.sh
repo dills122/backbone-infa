@@ -10,7 +10,7 @@ mkdir $remote_path
 
 /usr/bin/bash build-deploy.sh $remote_path
 
-/usr/bin/bash certbot.sh dsteele.dev
+/usr/bin/bash ~/backbone-src/scripts/certbot.sh dsteele.dev
 
 popd
 

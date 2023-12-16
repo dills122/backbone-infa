@@ -7,7 +7,7 @@ ssl_email="dylansteele57@gmail.com"
 generateSSL() {
     local full_domain=$1
     # Copy Nginx config files
-    sudo cp ~/backbone-src/.docker/nginx/conf.d/prod/${full_domain} /etc/nginx/sites-available/
+    sudo cp ~/backbone-src/.docker/nginx/conf.d/prod/${full_domain}.conf /etc/nginx/sites-available/
 
     sudo nginx -t
 
