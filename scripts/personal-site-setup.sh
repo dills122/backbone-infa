@@ -6,6 +6,8 @@ remote_path="/var/www/html/dsteele.dev"
 
 pushd dsteele.dev
 
+git pull
+
 mkdir $remote_path
 
 /usr/bin/bash build-deploy.sh $remote_path
