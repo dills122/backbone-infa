@@ -1,14 +1,14 @@
 #!/bin/bash
 
+remote_path="/var/www/html/dsteele.dev"
+
 /usr/bin/git clone https://github.com/dills122/dsteele.dev.git
 
 pushd dsteele.dev
 
-docker compose up "build" # build process not working properly, might need to update repo
+mkdir $remote_path
 
-mkdir /var/www/html/dsteele.dev
-
-cp ./_site/* /var/www/html/dsteele.dev
+/usr/bin/bash build-deploy.sh $remote_path
 
 /usr/bin/bash certbot.sh dsteele.dev
 
