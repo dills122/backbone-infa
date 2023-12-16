@@ -1,7 +1,5 @@
 #!/bin/bash
-if [ -n "$1" ]; then
-    EMAIL=$1
-else
-    EMAIL="example@example.com"
-fi
-ssh-keygen -t rsa -C $EMAIL -f ~/.ssh/do_id_rsa
+EMAILDEFAULT="dylansteele57@gmail.com"
+EMAIL="${1:-$EMAILDEFAULT}"
+
+ssh-keygen -t ed25519 -C $EMAIL -f ~/.ssh/do_id_ed25519
