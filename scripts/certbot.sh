@@ -1,6 +1,7 @@
 #!/bin/bash
 
-domain="$1" || "dsteele.dev"
+DOMAINDEFAULT="dsteele.dev"
+domain="${1:-$DOMAINDEFAULT}"
 sub_domain="$2"
 ssl_email="dylansteele57@gmail.com"
 

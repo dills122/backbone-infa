@@ -1,6 +1,6 @@
 #!/bin/bash
 
-remote_path="/var/www/html/dsteele.dev/"
+remote_path="/var/www/html/dsteele.dev"
 
 /usr/bin/git clone https://github.com/dills122/dsteele.dev.git
 
