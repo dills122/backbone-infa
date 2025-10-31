@@ -7,9 +7,13 @@ LOG_PATH="/var/log/backbone-bootstrap.log"
 STATE_DIR="/var/lib/backbone"
 PRIMARY_USER="ubuntu"
 PRIMARY_GROUP="$PRIMARY_USER"
+# shellcheck disable=SC2154
 SSH_AUTHORIZED_KEY="${ssh_public_key}"
+# shellcheck disable=SC2154
 REPO_URL="${repo_url}"
+# shellcheck disable=SC2154
 TIMEZONE="${timezone}"
+# shellcheck disable=SC2154
 CADDY_EMAIL="${caddy_email}"
 REPO_DIR="/opt/backbone-infa"
 SYSTEMD_DOCKER_UNIT="docker"
@@ -86,9 +90,11 @@ ensure_docker_repo() {
 
   if [ ! -f /etc/apt/sources.list.d/docker.list ]; then
     info "Configuring Docker apt source"
-    echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-$(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" >/etc/apt/sources.list.d/docker.list
+  # shellcheck source=/dev/null
+  cat <<EOF >/etc/apt/sources.list.d/docker.list
+deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && printf '%s' "$VERSION_CODENAME") stable
+EOF
   fi
 }
 

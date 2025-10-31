@@ -18,7 +18,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 # --- LOAD ENV FILE SAFELY ---
-export $(grep -v '^#' "$ENV_FILE" | xargs -I{} echo {} | grep '=')
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
 
 # --- EXPORT TERRAFORM VARIABLES ---
 if [[ -z "${DO_TOKEN:-}" ]]; then

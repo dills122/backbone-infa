@@ -85,7 +85,8 @@ replace_tokens() {
     -e "s/__SERVICE_NAME__/${SERVICE_NAME}/g" \
     -e "s/__SERVICE_ENV_PREFIX__/${SERVICE_ENV_PREFIX}/g" \
     -e "s/__SERVICE_INTERNAL_PORT__/${SERVICE_PORT}/g" \
-    -e "s/__SERVICE_DOMAIN__/${SERVICE_DOMAIN}/g"
+    -e "s/__SERVICE_DOMAIN__/${SERVICE_DOMAIN}/g" \
+    "$template_file"
 }
 
 replace_tokens "${COMPOSE_TEMPLATE}" >"${COMPOSE_OUTPUT}"
