@@ -46,11 +46,13 @@ jobs:
       - name: Docker Compose config
         run: |
           cp .env.example .env
+          cp docker/.env.example docker/.env
           set -a
           . ./.env
           set +a
           docker compose -f docker/docker-compose.yml config
           rm .env
+          rm docker/.env
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
