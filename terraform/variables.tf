@@ -29,9 +29,9 @@ variable "region" {
 }
 
 variable "droplet_size" {
-  description = "Droplet size slug (1–2 GB RAM recommended)."
+  description = "Droplet size slug (defaults to the cost-efficient s-1vcpu-1gb)."
   type        = string
-  default     = "s-1vcpu-2gb"
+  default     = "s-1vcpu-1gb"
 }
 
 variable "droplet_image" {

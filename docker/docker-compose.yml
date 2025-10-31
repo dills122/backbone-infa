@@ -36,6 +36,8 @@ services:
       - --include-restarting
     profiles:
       - updates
+    networks:
+      - backbone
 
   uptime-kuma:
     image: louislam/uptime-kuma:latest
@@ -56,8 +58,13 @@ services:
       - SYS_PTRACE
     security_opt:
       - apparmor:unconfined
-    ports:
-      - "19999:19999"
+    # Caddy handles public access; keep the Netdata dashboard on the backbone network only.
+    volumes:
+      - netdata_config:/etc/netdata
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+    networks:
+      - backbone
     profiles:
       - monitoring
 
@@ -73,6 +80,8 @@ services:
         echo "Customize this Restic command in docker/docker-compose.yml before enabling the backups profile."
     profiles:
       - backups
+    networks:
+      - backbone
 
 networks:
   backbone:
@@ -85,3 +94,6 @@ volumes:
   caddy_logs:
   uptime_kuma_data:
   backups_data:
+  netdata_config:
+  netdata_lib:
+  netdata_cache:

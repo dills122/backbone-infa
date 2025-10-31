@@ -132,6 +132,11 @@ ensure_repo() {
   chown -R "$PRIMARY_USER:$PRIMARY_GROUP" "$REPO_DIR" || true
 }
 
+compose() {
+  # maintain consistent docker compose invocation with repo-specific context
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
 run_compose() {
   if [ ! -f "$COMPOSE_FILE" ]; then
     info "Compose file $COMPOSE_FILE not found; skipping stack start"
@@ -144,7 +149,39 @@ run_compose() {
   fi
 
   info "Starting docker stack via compose"
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
+  compose up -d
+}
+
+verify_compose_stack() {
+  # surface container health issues early so bootstrap failures are obvious in logs
+  if [ ! -f "$COMPOSE_FILE" ] || [ ! -f "$ENV_FILE" ]; then
+    return
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    return
+  fi
+
+  info "Verifying compose services are running"
+  local running_services
+  running_services="$(compose ps --status=running --services 2>/dev/null || true)"
+
+  if ! printf '%s\n' "$running_services" | grep -Fxq "caddy"; then
+    info "Caddy is not yet running; dumping compose status for troubleshooting"
+    compose ps || true
+    compose logs --tail=100 caddy || true
+  else
+    info "Caddy container is running"
+  fi
+
+  local exited_services
+  exited_services="$(compose ps --status=exited --services 2>/dev/null || true)"
+  if [ -n "$exited_services" ]; then
+    info "Detected services with exited status: $exited_services"
+    for svc in $exited_services; do
+      compose logs --tail=100 "$svc" || true
+    done
+  fi
 }
 
 write_caddy_email_hint() {
@@ -165,6 +202,7 @@ main() {
   ensure_repo
   write_caddy_email_hint
   run_compose
+  verify_compose_stack
   info "Backbone bootstrap complete"
 }
 
