@@ -1,7 +1,8 @@
-# Updated: CI pipeline to ensure Terraform formatting and validation stay green.
+---
+# CI pipeline validating Terraform and bootstrap assets.
 name: terraform
 
-on:
+'on':
   pull_request:
     paths:
       - "terraform/**"

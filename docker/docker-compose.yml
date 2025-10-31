@@ -1,4 +1,5 @@
-# Updated: Base Docker stack providing Caddy reverse proxy and shared network for application services.
+---
+# Base Docker stack with Caddy reverse proxy and shared network.
 version: "3.9"
 
 services:
@@ -22,9 +23,11 @@ services:
     networks:
       - backbone
 
-  # Add new services below; start from templates/service-template/docker-compose.snippet.yml.
+  # Add new services using:
+  # templates/service-template/docker-compose.snippet.yml.
 
-  # Optional services scaffolding; enable with `docker compose --profile <name> up -d`.
+  # Optional services scaffolding.
+  # Enable with: docker compose --profile <name> up -d
   watchtower:
     image: containrrr/watchtower:latest
     container_name: backbone-watchtower
@@ -58,7 +61,7 @@ services:
       - SYS_PTRACE
     security_opt:
       - apparmor:unconfined
-    # Caddy handles public access; keep the Netdata dashboard on the backbone network only.
+    # Netdata stays internal; expose dashboards through Caddy if needed.
     volumes:
       - netdata_config:/etc/netdata
       - netdata_lib:/var/lib/netdata
@@ -77,7 +80,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Customize this Restic command in docker/docker-compose.yml before enabling the backups profile."
+        echo "Set a Restic command before enabling the backups profile."
     profiles:
       - backups
     networks:
