@@ -1,88 +1,70 @@
 ---
-# Base Docker stack with Caddy reverse proxy and shared network.
-version: "3.9"
-
+# Backbone stack: Caddy reverse proxy with services
 services:
   caddy:
     image: caddy:2.7-alpine
     container_name: backbone-caddy
     restart: unless-stopped
     env_file:
-      - ../.env
+      - ./.env
     environment:
-      - CADDY_ADMIN_EMAIL=${CADDY_ADMIN_EMAIL:?set in .env}
+      CADDY_ADMIN_EMAIL: ${CADDY_ADMIN_EMAIL:?set in .env}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-      - caddy_logs:/var/log/caddy
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./sites:/etc/caddy/sites:ro
     networks:
       - backbone
 
-  # Add new services using:
-  # templates/service-template/docker-compose.snippet.yml.
+  umami-db:
+    image: postgres:15
+    container_name: backbone-umami-db
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASS:?set in .env}
+      POSTGRES_DB: umami
+    volumes:
+      - umami_data:/var/lib/postgresql/data
+    networks:
+      - backbone
 
-  # Optional services scaffolding.
-  # Enable with: docker compose --profile <name> up -d
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: backbone-watchtower
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: backbone-umami
+    restart: unless-stopped
+    depends_on:
+      - umami-db
+    env_file:
+      - ./.env
+    environment:
+      # yamllint disable-line
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASS:?set in .env}@umami-db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?set in .env}
+      BASE_URL: https://umami.dsteele.dev
+    networks:
+      - backbone
+
+  coming-soon:
+    image: nginx:alpine
+    container_name: backbone-coming-soon
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command:
-      - --cleanup
-      - --include-restarting
-    profiles:
-      - updates
+      - ./sites/coming-soon:/usr/share/nginx/html:ro
     networks:
       - backbone
 
-  uptime-kuma:
-    image: louislam/uptime-kuma:latest
-    container_name: backbone-uptime-kuma
+  blog:
+    image: nginx:alpine
+    container_name: backbone-blog
     restart: unless-stopped
     volumes:
-      - uptime_kuma_data:/app/data
-    networks:
-      - backbone
-    profiles:
-      - monitoring
-
-  netdata:
-    image: netdata/netdata:stable
-    container_name: backbone-netdata
-    restart: unless-stopped
-    cap_add:
-      - SYS_PTRACE
-    security_opt:
-      - apparmor:unconfined
-    # Netdata stays internal; expose dashboards through Caddy if needed.
-    volumes:
-      - netdata_config:/etc/netdata
-      - netdata_lib:/var/lib/netdata
-      - netdata_cache:/var/cache/netdata
-    networks:
-      - backbone
-    profiles:
-      - monitoring
-
-  backups:
-    image: ghcr.io/restic/restic:latest
-    container_name: backbone-backups
-    restart: "no"
-    volumes:
-      - backups_data:/backups
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "Set a Restic command before enabling the backups profile."
-    profiles:
-      - backups
+      - ./sites/blog:/usr/share/nginx/html:ro
     networks:
       - backbone
 
@@ -94,9 +76,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
-  caddy_logs:
-  uptime_kuma_data:
-  backups_data:
-  netdata_config:
-  netdata_lib:
-  netdata_cache:
+  umami_data:
