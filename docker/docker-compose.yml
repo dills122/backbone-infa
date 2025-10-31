@@ -1,0 +1,87 @@
+# Updated: Base Docker stack providing Caddy reverse proxy and shared network for application services.
+version: "3.9"
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: backbone-caddy
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      - CADDY_ADMIN_EMAIL=${CADDY_ADMIN_EMAIL:?set in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+    networks:
+      - backbone
+
+  # Add new services below; start from templates/service-template/docker-compose.snippet.yml.
+
+  # Optional services scaffolding; enable with `docker compose --profile <name> up -d`.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: backbone-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --cleanup
+      - --include-restarting
+    profiles:
+      - updates
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: backbone-uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - backbone
+    profiles:
+      - monitoring
+
+  netdata:
+    image: netdata/netdata:stable
+    container_name: backbone-netdata
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    ports:
+      - "19999:19999"
+    profiles:
+      - monitoring
+
+  backups:
+    image: ghcr.io/restic/restic:latest
+    container_name: backbone-backups
+    restart: "no"
+    volumes:
+      - backups_data:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Customize this Restic command in docker/docker-compose.yml before enabling the backups profile."
+    profiles:
+      - backups
+
+networks:
+  backbone:
+    name: backbone
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
+  uptime_kuma_data:
+  backups_data:

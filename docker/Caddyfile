@@ -1,0 +1,9 @@
+# Updated: Base Caddyfile delegating per-service vhosts to files in ./sites.
+{
+  email {$CADDY_ADMIN_EMAIL}
+  # Enable below to point ACME staging for testing:
+  # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Import each site definition dropped into docker/sites/*.caddy.
+import ./sites/*.caddy

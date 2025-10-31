@@ -1,0 +1,42 @@
+# Updated: CI pipeline to ensure Terraform formatting and validation stay green.
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - "cloud-init.sh"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - "cloud-init.sh"
+      - ".github/workflows/terraform.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform fmt
+        run: terraform fmt -check
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
