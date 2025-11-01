@@ -2,7 +2,7 @@
 # CI pipeline validating Terraform and bootstrap assets.
 name: terraform
 
-'on':
+"on":
   pull_request:
     paths:
       - "terraform/**"
@@ -41,7 +41,7 @@ jobs:
 
       - name: shellcheck
         run: |
-          shellcheck cloud-init.sh scripts/*.sh
+          shellcheck *.sh scripts/*.sh
 
       - name: Docker Compose config
         run: |
