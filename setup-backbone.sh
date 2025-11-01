@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # backbone-infa setup script
 # Clones the repo, installs Docker CE, hardens the firewall,
-# verifies HTTPS + Umami setup, and configures a full production-ready stack.
+# configures ufw-docker correctly, and verifies HTTPS + Umami setup.
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -26,7 +26,7 @@ ROOT_DOMAIN="dsteele.dev"
 BLOG_DOMAIN="blog.${ROOT_DOMAIN}"
 UMAMI_DOMAIN="umami.${ROOT_DOMAIN}"
 
-# Services you expect to start (used for health checks)
+# Services to monitor for health checks
 SERVICES=("backbone-caddy" "backbone-umami" "backbone-blog" "backbone-coming-soon")
 
 # Internal ports to block (for security hardening)
@@ -44,14 +44,16 @@ if lsof -i :80 -sTCP:LISTEN >/dev/null 2>&1 || lsof -i :443 -sTCP:LISTEN >/dev/n
   exit 1
 fi
 
-# --- Update & prerequisites ---
+# --- System update & prerequisites ---
 echo "📦 Updating system packages..."
 apt-get update -y && apt-get upgrade -y
 
 echo "🔧 Installing prerequisites..."
 apt-get install -y ca-certificates curl gnupg lsb-release git dnsutils openssl ufw
 
-# --- Install Docker CE ---
+# -----------------------------------------------------------------------------
+# 🐳 Install Docker CE
+# -----------------------------------------------------------------------------
 echo "🐳 Installing Docker CE..."
 install -m 0755 -d /etc/apt/keyrings
 if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
@@ -69,14 +71,18 @@ echo "✅ Docker installed successfully:"
 docker --version
 docker compose version || true
 
-# --- Setup firewall (UFW) ---
+# -----------------------------------------------------------------------------
+# 🛡️ Firewall + ufw-docker setup
+# -----------------------------------------------------------------------------
 echo "🛡️  Configuring firewall (UFW)..."
+
 ufw default deny incoming
 ufw default allow outgoing
 
 ufw allow OpenSSH
-ufw allow 'Nginx Full'  # Ports 80 + 443 for Caddy
+ufw allow 'Nginx Full' # Allows ports 80 + 443 for Caddy
 
+# Deny common internal service ports
 for port in "${BLOCKED_PORTS[@]}"; do
   ufw deny "$port" || true
 done
@@ -86,15 +92,28 @@ echo "y" | ufw enable
 
 # Install ufw-docker if missing
 if ! command -v ufw-docker >/dev/null 2>&1; then
+  echo "📥 Installing ufw-docker helper..."
   wget -q -O /usr/local/bin/ufw-docker https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
   chmod +x /usr/local/bin/ufw-docker
   ufw-docker install || true
   systemctl restart ufw
 fi
 
+# ✅ Re-link Docker Caddy ports through ufw-docker
+echo "🔗 Applying ufw-docker rules for backbone-caddy..."
+if docker ps --format '{{.Names}}' | grep -q 'backbone-caddy'; then
+  ufw-docker allow backbone-caddy 80 || true
+  ufw-docker allow backbone-caddy 443 || true
+  echo "✅ ufw-docker rules applied for backbone-caddy (HTTP/HTTPS)"
+else
+  echo "⚠️  backbone-caddy not running yet — rules will apply after first startup."
+fi
+
 echo "✅ Firewall configured. Only ports 22, 80, and 443 are publicly accessible."
 
-# --- Verify DNS configuration before TLS setup ---
+# -----------------------------------------------------------------------------
+# 🌐 Verify DNS configuration
+# -----------------------------------------------------------------------------
 echo "🌐 Checking DNS records..."
 PUBLIC_IP=$(curl -s https://api.ipify.org)
 DOMAINS=("$ROOT_DOMAIN" "$BLOG_DOMAIN" "$UMAMI_DOMAIN")
@@ -110,7 +129,9 @@ for domain in "${DOMAINS[@]}"; do
   fi
 done
 
-# --- Clone or update repo ---
+# -----------------------------------------------------------------------------
+# 📦 Clone or update repository
+# -----------------------------------------------------------------------------
 echo "📁 Setting up backbone-infa repository..."
 mkdir -p /opt
 if [[ -d "$TARGET_DIR/.git" ]]; then
@@ -128,7 +149,9 @@ fi
 
 cd "$TARGET_DIR/docker"
 
-# --- Env setup ---
+# -----------------------------------------------------------------------------
+# ⚙️ Environment setup
+# -----------------------------------------------------------------------------
 if [[ ! -f ".env" ]]; then
   echo "⚙️  Creating .env file from example..."
   cp .env.example .env
@@ -144,14 +167,18 @@ if [[ ! -f ".env" ]]; then
   echo "✅ .env created with random secrets."
 fi
 
-# --- Pull and start containers ---
+# -----------------------------------------------------------------------------
+# 🧱 Docker Compose Stack
+# -----------------------------------------------------------------------------
 echo "⬇️  Pulling Docker images..."
 docker compose pull
 
 echo "🚀 Starting Docker stack..."
 docker compose up -d
 
-# --- Wait for containers to become healthy ---
+# -----------------------------------------------------------------------------
+# ⏳ Wait for containers to start
+# -----------------------------------------------------------------------------
 echo "⏳ Waiting for containers to start..."
 for service in "${SERVICES[@]}"; do
   printf "   ⏳ Waiting for %s ..." "$service"
@@ -165,11 +192,9 @@ for service in "${SERVICES[@]}"; do
   done
 done
 
-# --- Check running containers ---
-echo "📡 Current container status:"
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# --- Verify HTTPS endpoints with retries ---
+# -----------------------------------------------------------------------------
+# 📡 Verify HTTPS endpoints
+# -----------------------------------------------------------------------------
 echo "🔍 Verifying HTTPS connections..."
 for domain in "${DOMAINS[@]}"; do
   echo -n " → Testing https://$domain ..."
@@ -189,13 +214,17 @@ for domain in "${DOMAINS[@]}"; do
   fi
 done
 
-# --- Umami admin credentials ---
+# -----------------------------------------------------------------------------
+# 🔑 Umami credentials
+# -----------------------------------------------------------------------------
 echo "🔑 Checking Umami logs for admin credentials..."
 docker logs backbone-umami 2>&1 | grep "ADMIN_CREDENTIALS" | tail -n1 || echo "ℹ️  No new credentials found (admin likely exists already)."
 
-# --- Final summary ---
+# -----------------------------------------------------------------------------
+# 🧭 Final summary
+# -----------------------------------------------------------------------------
 echo
-echo "✅ Setup complete!"
+echo "✅ Setup complete for ${ROOT_DOMAIN}!"
 echo "🌐 Access:"
 echo "  https://${ROOT_DOMAIN}        (Coming Soon)"
 echo "  https://${BLOG_DOMAIN}        (Static Blog)"
@@ -208,4 +237,4 @@ echo
 echo "🔒 Firewall:"
 ufw status verbose | grep -E 'Status|22|80|443|6379|5432|3000' || true
 echo
-echo "🎉 All done — your Backbone environment for ${ROOT_DOMAIN} is fully deployed and secured!"
+echo "🎉 All done — your Backbone environment for ${ROOT_DOMAIN} is fully deployed, secured, and ready!"
