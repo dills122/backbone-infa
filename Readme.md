@@ -18,6 +18,7 @@ Backbone Infrastructure provisions a single DigitalOcean droplet (Ubuntu 24.04) 
   - [Cloud-Init Bootstrap](#cloud-init-bootstrap)
   - [Automated Host Setup Script](#automated-host-setup-script)
   - [Docker \& Caddy Stack](#docker--caddy-stack)
+  - [🚀 Deploying Sites](#-deploying-sites)
   - [Service Onboarding](#service-onboarding)
     - [Add a new service](#add-a-new-service)
     - [Helper script](#helper-script)
@@ -45,6 +46,8 @@ Backbone Infrastructure provisions a single DigitalOcean droplet (Ubuntu 24.04) 
 
 ```
 terraform/                # DigitalOcean IaC (main.tf, variables, outputs)
+config/
+  sites.yaml              # Central static-site deployment catalog
 docker/
   docker-compose.yml      # Core stack with Caddy + optional profiles
   Caddyfile               # Imports site snippets from docker/sites/
@@ -54,6 +57,8 @@ templates/
   service-template/       # Compose + Caddy snippets for new services
 scripts/
   add-service.sh          # Helper to scaffold service snippets
+  deploy-sites.sh         # Build/sync sites defined in config/sites.yaml
+  check-sites.sh          # Validate site sources and deployed assets
 services/                 # Generated service snippets (ignored if empty)
 cloud-init.sh             # Idempotent droplet bootstrap script
 .env.example              # Terraform/cloud-init helper defaults (keep in sync)
@@ -209,6 +214,22 @@ docker compose logs -f caddy                         # tail Caddy logs
 
 ---
 
+## 🚀 Deploying Sites
+
+Static sites—whether sourced from this repo or external GitHub projects—are defined once in `config/sites.yaml` and deployed to `/opt/backbone-infa/sites/<name>` where Caddy can serve them.
+
+1. **Add or edit an entry in `config/sites.yaml`.** Choose `source: local` with a `local_path` inside `docker/sites/` for bundled content, or `source: repo` plus `repo`, `branch`, `build`, and `output_dir` for Git-backed projects.
+2. **Deploy or refresh sites:**
+   ```bash
+   sudo bash scripts/deploy-sites.sh
+   ```
+   The script installs/updates clones under `/tmp/backbone-site-builds`, runs the configured build pipeline, syncs output to `/opt/backbone-infa/sites/<name>`, fixes ownership to `www-data:www-data`, and reloads Caddy when requested.
+3. **Map the domain in Caddy.** Point a Caddy site snippet (or compose service) at `root * /opt/backbone-infa/sites/<name>` to serve the freshly deployed assets.
+
+Use `scripts/check-sites.sh` to confirm source directories or deployed outputs exist and to review last-modified timestamps before or after a deployment.
+
+---
+
 ## Service Onboarding
 
 ### Add a new service
@@ -274,14 +295,19 @@ Terraform remains focused on the single droplet baseline, but structure is ready
 ## Scripts
 
 - `scripts/add-service.sh` — Scaffolds Compose and Caddy snippets for new services and validates that service names, domains, and internal ports are unique.
+- `scripts/deploy-sites.sh` — Builds or syncs each entry in `config/sites.yaml` into `/opt/backbone-infa/sites/<name>` and reloads Caddy when requested.
+- `scripts/check-sites.sh` — Verifies configured site sources/deployments exist and reports last-modified timestamps.
 
 Usage recap:
 
 ```bash
 scripts/add-service.sh <service-name> <domain> [internal-port]
+
+sudo bash scripts/deploy-sites.sh
+scripts/check-sites.sh
 ```
 
-The script prints next steps, including environment keys to populate and files to edit.
+Each script prints follow-up guidance and surfaces missing dependencies up front.
 
 ---
 

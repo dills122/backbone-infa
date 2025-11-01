@@ -1,0 +1,22 @@
+sites:
+  # Example external site
+  # - name: portfolio
+  #   domain: portfolio.dsteele.dev
+  #   source: repo
+  #   repo: https://github.com/dills122/portfolio-site.git
+  #   branch: main
+  #   build: npm run build
+  #   output_dir: dist
+  #   caddy_reload: true
+
+  - name: blog
+    domain: blog.dsteele.dev
+    source: local
+    local_path: docker/sites/blog
+    caddy_reload: true
+
+  - name: coming-soon
+    domain: dsteele.dev
+    source: local
+    local_path: docker/sites/coming-soon
+    caddy_reload: true
