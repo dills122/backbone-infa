@@ -1,0 +1,22 @@
+# Backbone Caddy entrypoint: terminates TLS and routes web traffic per README service onboarding.
+{
+  email {$CADDY_ADMIN_EMAIL}
+  acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+# Root domain
+dsteele.dev {
+  encode gzip zstd
+  reverse_proxy backbone-coming-soon:80
+}
+
+# Blog subdomain
+blog.dsteele.dev {
+  encode gzip zstd
+  reverse_proxy backbone-blog:80
+}
+
+# Umami analytics
+umami.dsteele.dev {
+  encode gzip zstd
+  reverse_proxy backbone-umami:3000
+}

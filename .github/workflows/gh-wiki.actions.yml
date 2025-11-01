@@ -1,4 +1,5 @@
-on:
+---
+'on':
   milestone:
     types: [closed]
 name: Milestone Closure

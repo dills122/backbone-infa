@@ -1,0 +1,79 @@
+---
+# Backbone stack: Caddy reverse proxy with services
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: backbone-caddy
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      CADDY_ADMIN_EMAIL: ${CADDY_ADMIN_EMAIL:?set in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - backbone
+
+  umami-db:
+    image: postgres:15
+    container_name: backbone-umami-db
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASS:?set in .env}
+      POSTGRES_DB: umami
+    volumes:
+      - umami_data:/var/lib/postgresql/data
+    networks:
+      - backbone
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: backbone-umami
+    restart: unless-stopped
+    depends_on:
+      - umami-db
+    env_file:
+      - ./.env
+    environment:
+      # yamllint disable-line
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASS:?set in .env}@umami-db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?set in .env}
+      BASE_URL: https://umami.dsteele.dev
+    networks:
+      - backbone
+
+  coming-soon:
+    image: nginx:alpine
+    container_name: backbone-coming-soon
+    restart: unless-stopped
+    volumes:
+      - ./sites/coming-soon:/usr/share/nginx/html:ro
+    networks:
+      - backbone
+
+  blog:
+    image: nginx:alpine
+    container_name: backbone-blog
+    restart: unless-stopped
+    volumes:
+      - ./sites/blog:/usr/share/nginx/html:ro
+    networks:
+      - backbone
+
+networks:
+  backbone:
+    name: backbone
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  umami_data:
