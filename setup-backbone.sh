@@ -165,6 +165,11 @@ if [[ ! -f ".env" ]]; then
   sed -i "s/^UMAMI_ADMIN_EMAIL=.*/UMAMI_ADMIN_EMAIL=${UMAMI_ADMIN_EMAIL}/" .env || echo "UMAMI_ADMIN_EMAIL=${UMAMI_ADMIN_EMAIL}" >> .env
 
   echo "✅ .env created with random secrets."
+
+  if [[ ! -f "../.env" ]]; then
+    echo "🔗 Seeding root .env for Terraform/cloud-init helpers..."
+    cp .env ../.env
+  fi
 fi
 
 # -----------------------------------------------------------------------------
@@ -199,8 +204,7 @@ echo "🔍 Verifying HTTPS connections..."
 for domain in "${DOMAINS[@]}"; do
   echo -n " → Testing https://$domain ..."
   success=false
-  # shellcheck disable=SC2034
-  for i in {1..5}; do
+  for attempt in {1..5}; do
     if curl -fsS --max-time 15 "https://$domain" >/dev/null 2>&1; then
       echo " ✅ OK"
       success=true
@@ -210,7 +214,7 @@ for domain in "${DOMAINS[@]}"; do
     sleep 5
   done
   if [[ "$success" == false ]]; then
-    echo " ❌ Failed (check DNS or cert)"
+    echo " ❌ Failed after ${attempt:-5} attempts (check DNS or cert)"
   fi
 done
 
