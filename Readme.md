@@ -8,21 +8,26 @@ Backbone Infrastructure provisions a single DigitalOcean droplet (Ubuntu 24.04) 
 
 ## Table of Contents
 
-1. [Architecture](#architecture)
-2. [Repository Layout](#repository-layout)
-3. [Prerequisites](#prerequisites)
-4. [Quick Start](#quick-start)
-5. [Terraform Workflow](#terraform-workflow)
-6. [Cloud-Init Bootstrap](#cloud-init-bootstrap)
-7. [Docker & Caddy Stack](#docker--caddy-stack)
-8. [Service Onboarding](#service-onboarding)
-9. [Environment Variables](#environment-variables)
-10. [Optional Profiles & Future Modules](#optional-profiles--future-modules)
-11. [Scripts](#scripts)
-12. [CI / Automation](#ci--automation)
-13. [Troubleshooting](#troubleshooting)
-14. [Reference Commands](#reference-commands)
-15. [License](#license)
+- [Backbone Infrastructure](#backbone-infrastructure)
+  - [Table of Contents](#table-of-contents)
+  - [Architecture](#architecture)
+  - [Repository Layout](#repository-layout)
+  - [Prerequisites](#prerequisites)
+  - [Quick Start](#quick-start)
+  - [Terraform Workflow](#terraform-workflow)
+  - [Cloud-Init Bootstrap](#cloud-init-bootstrap)
+  - [Automated Host Setup Script](#automated-host-setup-script)
+  - [Docker \& Caddy Stack](#docker--caddy-stack)
+  - [Service Onboarding](#service-onboarding)
+    - [Add a new service](#add-a-new-service)
+    - [Helper script](#helper-script)
+  - [Environment Variables](#environment-variables)
+  - [Optional Profiles \& Future Modules](#optional-profiles--future-modules)
+  - [Scripts](#scripts)
+  - [CI / Automation](#ci--automation)
+  - [Troubleshooting](#troubleshooting)
+  - [Reference Commands](#reference-commands)
+  - [License](#license)
 
 ---
 
@@ -43,6 +48,7 @@ terraform/                # DigitalOcean IaC (main.tf, variables, outputs)
 docker/
   docker-compose.yml      # Core stack with Caddy + optional profiles
   Caddyfile               # Imports site snippets from docker/sites/
+  .env.example            # Runtime defaults consumed by Compose/setup script
   sites/                  # Per-service Caddy definitions (git-kept empty)
 templates/
   service-template/       # Compose + Caddy snippets for new services
@@ -50,7 +56,7 @@ scripts/
   add-service.sh          # Helper to scaffold service snippets
 services/                 # Generated service snippets (ignored if empty)
 cloud-init.sh             # Idempotent droplet bootstrap script
-.env.example              # Shared environment file consumed by Compose/Caddy
+.env.example              # Terraform/cloud-init helper defaults (keep in sync)
 .github/workflows/        # Terraform formatting & validation workflow
 ```
 
@@ -70,34 +76,39 @@ cloud-init.sh             # Idempotent droplet bootstrap script
 ## Quick Start
 
 1. **Clone the repo** and switch to it.
-2. **Copy the example environment file:**
+2. **Copy the example environment files (Compose + Terraform helpers):**
    ```bash
+   cp docker/.env.example docker/.env
    cp .env.example .env
    ```
-   Set at least `CADDY_ADMIN_EMAIL` and any service-specific values you intend to use.
-3. **Export Terraform variables** (never commit secrets):
+   Keep the two files in sync—`docker/.env` drives Docker Compose, while `.env` in the repo root is consumed by Terraform helpers and `cloud-init.sh`.
+3. **Review `setup-backbone.sh` configuration** (top of the file) and adjust domains, admin email, and service list if you plan to use the automated host bootstrap.
+4. **Export Terraform variables** (never commit secrets):
    ```bash
    export TF_VAR_do_token=your_digitalocean_token
    export TF_VAR_ssh_key_fingerprint=aa:bb:cc:dd
    export TF_VAR_caddy_admin_email=ops@example.com   # optional but recommended
    ```
-4. **Optional:** Override defaults in `terraform/terraform.tfvars` (or `prod.auto.tfvars`) if you need different sizes/regions. For example:
+5. **Optional:** Override defaults in `terraform/terraform.tfvars` (or `prod.auto.tfvars`) if you need different sizes/regions. For example:
    ```hcl
    droplet_size = "s-1vcpu-2gb"
    timezone     = "America/Chicago"
    ```
-5. **Provision the droplet:**
+6. **Provision the droplet:**
    ```bash
    terraform -chdir=terraform init
    terraform -chdir=terraform plan -out backbone.tfplan
    terraform -chdir=terraform apply "backbone.tfplan"
    ```
-6. **Connect to the droplet** using the Terraform output (`ssh ubuntu@<ip>`).
-7. **Start services** if the bootstrap skipped them (e.g., no `.env` yet):
+7. **Connect to the droplet** using the Terraform output (`ssh ubuntu@<ip>`).
+8. **Run the automated host bootstrap** (recommended for clean Ubuntu 22.04+ hosts):
    ```bash
-   cd /opt/backbone-infa/docker
-   docker compose up -d
+   scp setup-backbone.sh ubuntu@<ip>:/tmp/
+   ssh ubuntu@<ip>
+   sudo bash /tmp/setup-backbone.sh
    ```
+   The script installs Docker, configures UFW/ufw-docker, clones this repo into `/opt/backbone-infa`, seeds secrets in `docker/.env`, starts the stack, and verifies HTTPS/Umami.
+9. **Manual fallback:** If you skip the script, sign in to the droplet, ensure `/opt/backbone-infa/docker/.env` exists, and run `docker compose up -d` from `/opt/backbone-infa/docker`.
 
 ---
 
@@ -141,9 +152,37 @@ cloud-init.sh             # Idempotent droplet bootstrap script
 9. Logs actions under `/var/log/backbone-bootstrap.log`.
 
 Re-run on the droplet for troubleshooting:
+
 ```bash
 sudo bash /opt/backbone-infa/cloud-init.sh
 ```
+
+---
+
+## Automated Host Setup Script
+
+`setup-backbone.sh` (repo root) automates the post-provisioning configuration of a fresh Ubuntu 22.04+ host. Run it as `root`/`sudo` once you have SSH access to the droplet.
+
+**What it does**
+
+- Confirms ports 80/443 are free, updates apt packages, and installs Docker CE, the Compose plugin, git, ufw, `ufw-docker`, `dnsutils`, and other prerequisites.
+- Configures UFW to allow only SSH/HTTP/HTTPS, blocks common internal service ports (5432, 6379, 3000), and re-applies `ufw-docker` rules for the Caddy container.
+- Validates that `dsteele.dev`, `blog.dsteele.dev`, and `umami.dsteele.dev` resolve to the droplet IP before requesting certificates.
+- Clones (or updates) this repository under `/opt/backbone-infa` on branch `big-refactor`.
+- Seeds `docker/.env` from `docker/.env.example` with a new Umami database password, application secret, admin email, and the configured Caddy contact; also writes a copy to `/opt/backbone-infa/.env` for Terraform/cloud-init compatibility.
+- Pulls the Compose images, starts the stack, waits for container health checks, hits the HTTPS endpoints with retries, and scrapes Umami logs for autogenerated admin credentials.
+- Prints a condensed summary of URLs, tail commands, firewall state, and—if newly generated—the Umami login.
+
+**Usage**
+
+```bash
+# On your workstation (after adjusting the script header for domains/emails)
+scp setup-backbone.sh ubuntu@<droplet-ip>:/tmp/
+ssh ubuntu@<droplet-ip>
+sudo bash /tmp/setup-backbone.sh
+```
+
+Re-run the script if you want to regenerate secrets, pull updates from GitHub, or re-apply firewall/Compose settings on the same host; it safely refreshes the repo and restarts the stack in place.
 
 ---
 
@@ -160,6 +199,7 @@ Located in `docker/docker-compose.yml`:
 - **Networks & volumes** are pre-defined (`backbone` network, persistent volumes for Caddy/monitoring/backups).
 
 Useful commands:
+
 ```bash
 docker compose -f docker/docker-compose.yml config   # validate syntax
 docker compose up -d                                 # start core stack
@@ -180,7 +220,7 @@ docker compose logs -f caddy                         # tail Caddy logs
    cp templates/service-template/Caddyfile.snippet "docker/sites/<name>.caddy"
    ```
 2. **Edit placeholders** in the new snippets (`<name>` service block and `reverse_proxy` target port).
-3. **Add environment values** to `.env` following the `SERVICE_<NAME>_` convention (image, domain, internal port).
+3. **Add environment values** to `docker/.env` following the `SERVICE_<NAME>_` convention (image, domain, internal port). Mirror them to `.env` in the repo root if you rely on Terraform/cloud-init helpers.
 4. **Append the Compose snippet** into `docker/docker-compose.yml` within the `services:` section.
 5. **Confirm the Caddy snippet** lives under `docker/sites/`; the main `Caddyfile` imports everything in that directory automatically.
 6. **Validate & run:**
@@ -198,16 +238,18 @@ scripts/add-service.sh blog blog.example.com 8080
 ```
 
 It generates:
+
 - `services/blog/docker-compose.snippet.yml`
 - `docker/sites/blog.caddy`
 
-Review the generated files, commit them, and populate the suggested keys in `.env` before starting the stack.
+Review the generated files, commit them, and populate the suggested keys in `docker/.env` (and `.env` if you maintain the mirror) before starting the stack.
 
 ---
 
 ## Environment Variables
 
-- `.env` (copied from `.env.example`) is consumed by Docker Compose and Caddy.
+- `docker/.env` (copied from `docker/.env.example`) feeds Docker Compose and the runtime stack. The setup script populates it automatically on new hosts.
+- `.env` at the repo root mirrors those values for Terraform helpers and `cloud-init.sh`; keep it synchronized with `docker/.env` (the setup script seeds it during host bootstrap).
 - Keys follow the convention `SERVICE_<NAME>_VARIABLE`. Example:
   ```dotenv
   CADDY_ADMIN_EMAIL=admin@example.com
@@ -215,7 +257,7 @@ Review the generated files, commit them, and populate the suggested keys in `.en
   SERVICE_BLOG_DOMAIN=blog.example.com
   SERVICE_BLOG_PORT=8080
   ```
-- Secrets (database passwords, API keys) should be injected via `.env` or a secure secrets manager—never committed.
+- Secrets (database passwords, API keys) should be injected via `docker/.env` (and mirrored to `.env` if used) or a secure secrets manager—never committed.
 
 ---
 
@@ -234,6 +276,7 @@ Terraform remains focused on the single droplet baseline, but structure is ready
 - `scripts/add-service.sh` — Scaffolds Compose and Caddy snippets for new services and validates that service names, domains, and internal ports are unique.
 
 Usage recap:
+
 ```bash
 scripts/add-service.sh <service-name> <domain> [internal-port]
 ```
@@ -248,7 +291,7 @@ GitHub Actions workflow `.github/workflows/terraform.yml` runs on pushes/PRs tou
 
 1. `yamllint` across Docker, template, and workflow YAML.
 2. `shellcheck` for `cloud-init.sh` and helper scripts.
-3. `docker compose -f docker/docker-compose.yml config` with the example `.env`.
+3. `docker compose -f docker/docker-compose.yml config` after copying both `.env.example` → `.env` and `docker/.env.example` → `docker/.env` (the workflow seeds these automatically).
 4. `terraform fmt -check`
 5. `terraform init -backend=false`
 6. `terraform validate`
@@ -259,16 +302,17 @@ Add additional tooling (e.g., `hadolint`) when Dockerfiles enter the repo.
 
 ## Troubleshooting
 
-| Issue | Resolution |
-| ----- | ---------- |
-| `terraform init` fails (no registry access) | Ensure outbound internet; in air-gapped environments, vendor providers manually or run with `-backend=false` just for validation. |
-| Droplet provisioned but Caddy missing | Tail `/var/log/backbone-bootstrap.log`; rerun `cloud-init.sh` and check `docker compose ps --status=running caddy`. |
-| SSL issuance fails | Verify DNS A records point at `droplet_ip`, confirm ports 80/443 are permitted by both DigitalOcean and UFW, and inspect `docker compose logs --tail=100 caddy`. |
-| Container exits immediately | `docker compose ps --status=exited` shows offenders; inspect logs and confirm environment variables are set. The bootstrap script prints these containers if it detects failures. |
-| Service unreachable | Ensure the Compose snippet uses `expose` (not `ports`) and that a matching Caddy site exists under `docker/sites/`. Domains must be unique per service. |
-| Need to update repo on droplet | `git -C /opt/backbone-infa pull` or rerun `cloud-init.sh`. |
+| Issue                                       | Resolution                                                                                                                                                                        |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `terraform init` fails (no registry access) | Ensure outbound internet; in air-gapped environments, vendor providers manually or run with `-backend=false` just for validation.                                                 |
+| Droplet provisioned but Caddy missing       | Tail `/var/log/backbone-bootstrap.log`; rerun `cloud-init.sh` and check `docker compose ps --status=running caddy`.                                                               |
+| SSL issuance fails                          | Verify DNS A records point at `droplet_ip`, confirm ports 80/443 are permitted by both DigitalOcean and UFW, and inspect `docker compose logs --tail=100 caddy`.                  |
+| Container exits immediately                 | `docker compose ps --status=exited` shows offenders; inspect logs and confirm environment variables are set. The bootstrap script prints these containers if it detects failures. |
+| Service unreachable                         | Ensure the Compose snippet uses `expose` (not `ports`) and that a matching Caddy site exists under `docker/sites/`. Domains must be unique per service.                           |
+| Need to update repo on droplet              | `git -C /opt/backbone-infa pull` or rerun `cloud-init.sh`.                                                                                                                        |
 
 Logs of interest:
+
 - `/var/log/cloud-init-output.log`
 - `/var/log/backbone-bootstrap.log`
 - `docker logs backbone-caddy`
