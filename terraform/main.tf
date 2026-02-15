@@ -26,6 +26,7 @@ locals {
     root  = var.root_record_name
     blog  = var.blog_record_name
     umami = var.umami_record_name
+    www   = var.www_record_name
   } : {}
 }
 

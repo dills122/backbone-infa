@@ -44,6 +44,9 @@ ensure_ubuntu_ssh_access() {
   local source_auth
   local ubuntu_home
   local ubuntu_auth
+  local metadata_keys
+  local shadow_field
+  local random_hash
 
   if [[ "$source_user" == "root" ]]; then
     source_auth="/root/.ssh/authorized_keys"
@@ -56,6 +59,7 @@ ensure_ubuntu_ssh_access() {
     adduser --disabled-password --gecos "" "$ubuntu_user"
   fi
   usermod -aG sudo "$ubuntu_user" || true
+  usermod -s /bin/bash "$ubuntu_user" || true
 
   ubuntu_home="$(getent passwd "$ubuntu_user" | cut -d: -f6)"
   if [[ -z "$ubuntu_home" ]]; then
@@ -80,10 +84,28 @@ ensure_ubuntu_ssh_access() {
     echo "⚠️  No source authorized_keys found at ${source_auth}; cannot copy current access key."
   fi
 
+  # Pull in DigitalOcean metadata keys as an extra fallback to prevent lockouts.
+  metadata_keys="$(curl -fsS http://169.254.169.254/metadata/v1/public-keys 2>/dev/null || true)"
+  if [[ -n "$metadata_keys" ]]; then
+    while IFS= read -r keyline; do
+      [[ -z "$keyline" ]] && continue
+      if ! grep -Fxq "$keyline" "$ubuntu_auth"; then
+        echo "$keyline" >>"$ubuntu_auth"
+      fi
+    done <<<"$metadata_keys"
+  fi
+
   if ! grep -Eq '^(ssh-(ed25519|rsa)|ecdsa-sha2-)' "$ubuntu_auth"; then
     echo "❌ ${ubuntu_auth} has no valid SSH public keys."
     echo "    Add a key for ${ubuntu_user} before SSH hardening to avoid lockout."
     exit 1
+  fi
+
+  # Some Ubuntu images treat a locked account as ineligible for SSH key auth.
+  shadow_field="$(getent shadow "$ubuntu_user" | cut -d: -f2 || true)"
+  if [[ "$shadow_field" == "!"* || "$shadow_field" == "*" || -z "$shadow_field" ]]; then
+    random_hash="$(openssl passwd -6 "$(openssl rand -hex 24)")"
+    usermod -p "$random_hash" "$ubuntu_user"
   fi
 
   echo "✅ Verified ${ubuntu_user} has SSH key-based access configured."

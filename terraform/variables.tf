@@ -124,3 +124,9 @@ variable "umami_record_name" {
   type        = string
   default     = "umami"
 }
+
+variable "www_record_name" {
+  description = "Record name for the www subdomain."
+  type        = string
+  default     = "www"
+}

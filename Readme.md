@@ -18,6 +18,7 @@ Terraform provisions the droplet and firewall. `cloud-init.sh` bootstraps the ho
 - Host bootstrap:
   - Installs Docker + Compose plugin
   - Enables UFW, Fail2ban, SSH hardening
+  - Ensures `ubuntu` user has SSH key access before disabling root SSH login
   - Clones repo to `/opt/backbone-infa`
 - Runtime stack (`docker/docker-compose.yml`):
   - `caddy`
@@ -82,6 +83,7 @@ export TF_VAR_caddy_admin_email="ops@example.com"
 export TF_VAR_ssh_allowed_cidrs='["0.0.0.0/0","::/0"]'
 export TF_VAR_manage_dns_records=true
 export TF_VAR_domain_name="dsteele.dev"
+export TF_VAR_dns_ttl=300
 ```
 
 SSH key behavior:
@@ -91,7 +93,7 @@ SSH key behavior:
 
 DNS behavior:
 
-- If `manage_dns_records=true` and `domain_name` is set, Terraform manages `@`, `blog`, and `umami` A records pointing at the droplet IP.
+- If `manage_dns_records=true` and `domain_name` is set, Terraform manages `@`, `www`, `blog`, and `umami` A records pointing at the droplet IP.
 - The domain zone must already exist in DigitalOcean DNS.
 
 Plan/apply:

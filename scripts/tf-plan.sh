@@ -64,6 +64,26 @@ if [[ -n "${MANAGE_DNS_RECORDS:-}" ]]; then
   export TF_VAR_manage_dns_records="$MANAGE_DNS_RECORDS"
 fi
 
+if [[ -n "${DNS_TTL:-}" ]]; then
+  export TF_VAR_dns_ttl="$DNS_TTL"
+fi
+
+if [[ -n "${ROOT_RECORD_NAME:-}" ]]; then
+  export TF_VAR_root_record_name="$ROOT_RECORD_NAME"
+fi
+
+if [[ -n "${BLOG_RECORD_NAME:-}" ]]; then
+  export TF_VAR_blog_record_name="$BLOG_RECORD_NAME"
+fi
+
+if [[ -n "${UMAMI_RECORD_NAME:-}" ]]; then
+  export TF_VAR_umami_record_name="$UMAMI_RECORD_NAME"
+fi
+
+if [[ -n "${WWW_RECORD_NAME:-}" ]]; then
+  export TF_VAR_www_record_name="$WWW_RECORD_NAME"
+fi
+
 # --- TERRAFORM COMMAND HANDLER ---
 ACTION=${1:-plan}
 PLAN_FILE="backbone.tfplan"
