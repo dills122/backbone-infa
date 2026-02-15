@@ -16,6 +16,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites.d:/etc/caddy/sites.d:ro
+      - /opt/backbone-infa/sites:/srv/sites:ro
     networks:
       - backbone
 
@@ -35,7 +37,7 @@ services:
       - backbone
 
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    image: ${UMAMI_IMAGE:-ghcr.io/umami-software/umami:postgresql-latest}
     container_name: backbone-umami
     restart: unless-stopped
     depends_on:
@@ -47,24 +49,6 @@ services:
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASS:?set in .env}@umami-db:5432/umami
       APP_SECRET: ${UMAMI_APP_SECRET:?set in .env}
       BASE_URL: https://umami.dsteele.dev
-    networks:
-      - backbone
-
-  coming-soon:
-    image: nginx:alpine
-    container_name: backbone-coming-soon
-    restart: unless-stopped
-    volumes:
-      - ./sites/coming-soon:/usr/share/nginx/html:ro
-    networks:
-      - backbone
-
-  blog:
-    image: nginx:alpine
-    container_name: backbone-blog
-    restart: unless-stopped
-    volumes:
-      - ./sites/blog:/usr/share/nginx/html:ro
     networks:
       - backbone
 

@@ -18,7 +18,7 @@ CADDY_EMAIL="${caddy_email}"
 REPO_DIR="/opt/backbone-infa"
 SYSTEMD_DOCKER_UNIT="docker"
 COMPOSE_FILE="$REPO_DIR/docker/docker-compose.yml"
-ENV_FILE="$REPO_DIR/.env"
+ENV_FILE="$REPO_DIR/docker/.env"
 
 mkdir -p "$(dirname "$LOG_PATH")"
 mkdir -p "$STATE_DIR"
@@ -72,9 +72,12 @@ ensure_packages() {
     apt-get install -y \
       ca-certificates \
       curl \
+      fail2ban \
       git \
       gnupg \
       lsb-release \
+      rsync \
+      unattended-upgrades \
       ufw
     touch "$STATE_DIR/packages.installed"
   fi
@@ -112,14 +115,66 @@ ensure_docker() {
 
 ensure_firewall() {
   if command -v ufw >/dev/null 2>&1; then
+    ufw --force default deny incoming
+    ufw --force default allow outgoing
+    ufw --force allow OpenSSH
+    ufw --force limit OpenSSH
+    ufw --force allow 80/tcp
+    ufw --force allow 443/tcp
     if ! ufw status | grep -q "Status: active"; then
       info "Enabling UFW firewall with SSH/HTTP/HTTPS"
-      ufw --force allow OpenSSH
-      ufw --force allow 80/tcp
-      ufw --force allow 443/tcp
       ufw --force enable
     fi
   fi
+}
+
+ensure_ssh_hardening() {
+  local sshd_config="/etc/ssh/sshd_config"
+
+  if [ ! -f "$sshd_config" ]; then
+    return
+  fi
+
+  ensure_sshd_setting() {
+    local key="$1"
+    local value="$2"
+    if grep -Eq "^[#[:space:]]*$key[[:space:]]+" "$sshd_config"; then
+      sed -i -E "s|^[#[:space:]]*$key[[:space:]]+.*|$key $value|g" "$sshd_config"
+    else
+      printf '%s %s\n' "$key" "$value" >>"$sshd_config"
+    fi
+  }
+
+  info "Applying SSH hardening settings"
+  ensure_sshd_setting "PermitRootLogin" "no"
+  ensure_sshd_setting "PasswordAuthentication" "no"
+  ensure_sshd_setting "KbdInteractiveAuthentication" "no"
+  ensure_sshd_setting "ChallengeResponseAuthentication" "no"
+  ensure_sshd_setting "PubkeyAuthentication" "yes"
+
+  systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || true
+}
+
+ensure_fail2ban() {
+  if ! command -v fail2ban-client >/dev/null 2>&1; then
+    return
+  fi
+
+  local jail_local="/etc/fail2ban/jail.local"
+  if [ ! -f "$jail_local" ]; then
+    cat >"$jail_local" <<'EOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+EOF
+  fi
+
+  systemctl enable fail2ban >/dev/null 2>&1 || true
+  systemctl restart fail2ban >/dev/null 2>&1 || true
 }
 
 ensure_repo() {
@@ -150,12 +205,38 @@ run_compose() {
   fi
 
   if [ ! -f "$ENV_FILE" ]; then
-    info "Environment file $ENV_FILE not present; skipping stack start"
-    return
+    local legacy_env="$REPO_DIR/.env"
+    if [ -f "$legacy_env" ]; then
+      info "Migrating legacy env file from $legacy_env to $ENV_FILE"
+      cp "$legacy_env" "$ENV_FILE"
+      chown "$PRIMARY_USER:$PRIMARY_GROUP" "$ENV_FILE" || true
+    else
+      info "Environment file $ENV_FILE not present; skipping stack start"
+      return
+    fi
   fi
 
   info "Starting docker stack via compose"
   compose up -d
+}
+
+prepare_static_sites() {
+  local static_src="$REPO_DIR/docker/sites"
+  local static_dst="/opt/backbone-infa/sites"
+
+  if [ ! -d "$static_src" ]; then
+    return
+  fi
+
+  mkdir -p "$static_dst"
+
+  for site in blog coming-soon; do
+    if [ -d "$static_src/$site" ]; then
+      info "Seeding static site content for $site"
+      mkdir -p "$static_dst/$site"
+      rsync -a --delete "$static_src/$site/" "$static_dst/$site/"
+    fi
+  done
 }
 
 verify_compose_stack() {
@@ -203,9 +284,12 @@ main() {
   ensure_docker_repo
   ensure_docker
   ensure_firewall
+  ensure_ssh_hardening
+  ensure_fail2ban
   ensure_timezone
   ensure_user
   ensure_repo
+  prepare_static_sites
   write_caddy_email_hint
   run_compose
   verify_compose_stack

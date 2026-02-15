@@ -13,21 +13,21 @@ export DEBIAN_FRONTEND=noninteractive
 # -----------------------------------------------------------------------------
 
 # Git repository + branch
-REPO_URL="https://github.com/dills122/backbone-infa.git"
-BRANCH="big-refactor"
+REPO_URL="${REPO_URL:-https://github.com/dills122/backbone-infa.git}"
+BRANCH="${BRANCH:-main}"
 TARGET_DIR="/opt/backbone-infa"
 
 # Admin & domain info
-CADDY_EMAIL="dylansteele57@gmail.com"
-UMAMI_ADMIN_EMAIL="admin@local.dev"
+CADDY_EMAIL="${CADDY_EMAIL:-admin@example.com}"
+UMAMI_ADMIN_EMAIL="${UMAMI_ADMIN_EMAIL:-admin@example.com}"
 
 # Root domain and subdomains
-ROOT_DOMAIN="dsteele.dev"
+ROOT_DOMAIN="${ROOT_DOMAIN:-example.com}"
 BLOG_DOMAIN="blog.${ROOT_DOMAIN}"
 UMAMI_DOMAIN="umami.${ROOT_DOMAIN}"
 
 # Services to monitor for health checks
-SERVICES=("backbone-caddy" "backbone-umami" "backbone-blog" "backbone-coming-soon")
+SERVICES=("backbone-caddy" "backbone-umami" "backbone-umami-db")
 
 # Internal ports to block (for security hardening)
 BLOCKED_PORTS=(6379 5432 3000)
@@ -49,7 +49,7 @@ echo "📦 Updating system packages..."
 apt-get update -y && apt-get upgrade -y
 
 echo "🔧 Installing prerequisites..."
-apt-get install -y ca-certificates curl gnupg lsb-release git dnsutils openssl ufw
+apt-get install -y ca-certificates curl fail2ban gnupg lsb-release git dnsutils openssl rsync unattended-upgrades ufw
 
 # -----------------------------------------------------------------------------
 # 🐳 Install Docker CE
@@ -80,7 +80,9 @@ ufw default deny incoming
 ufw default allow outgoing
 
 ufw allow OpenSSH
-ufw allow 'Nginx Full' # Allows ports 80 + 443 for Caddy
+ufw limit OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
 
 # Deny common internal service ports
 for port in "${BLOCKED_PORTS[@]}"; do
@@ -110,6 +112,47 @@ else
 fi
 
 echo "✅ Firewall configured. Only ports 22, 80, and 443 are publicly accessible."
+
+# -----------------------------------------------------------------------------
+# 🔐 SSH hardening + fail2ban
+# -----------------------------------------------------------------------------
+echo "🔐 Applying SSH hardening..."
+SSHD_CONFIG="/etc/ssh/sshd_config"
+if [[ -f "$SSHD_CONFIG" ]]; then
+  ensure_sshd_setting() {
+    local key="$1"
+    local value="$2"
+    if grep -Eq "^[#[:space:]]*${key}[[:space:]]+" "$SSHD_CONFIG"; then
+      sed -i -E "s|^[#[:space:]]*${key}[[:space:]]+.*|${key} ${value}|g" "$SSHD_CONFIG"
+    else
+      echo "${key} ${value}" >> "$SSHD_CONFIG"
+    fi
+  }
+
+  ensure_sshd_setting "PermitRootLogin" "no"
+  ensure_sshd_setting "PasswordAuthentication" "no"
+  ensure_sshd_setting "KbdInteractiveAuthentication" "no"
+  ensure_sshd_setting "ChallengeResponseAuthentication" "no"
+  ensure_sshd_setting "PubkeyAuthentication" "yes"
+  systemctl reload ssh || systemctl reload sshd || true
+fi
+
+echo "🛡️ Configuring fail2ban..."
+if command -v fail2ban-client >/dev/null 2>&1; then
+  if [[ ! -f /etc/fail2ban/jail.local ]]; then
+    cat >/etc/fail2ban/jail.local <<'EOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+EOF
+  fi
+  systemctl enable fail2ban
+  systemctl restart fail2ban
+fi
 
 # -----------------------------------------------------------------------------
 # 🌐 Verify DNS configuration
@@ -150,6 +193,17 @@ fi
 cd "$TARGET_DIR/docker"
 
 # -----------------------------------------------------------------------------
+# 🗂️ Seed static-site deploy paths for Caddy file_server roots
+# -----------------------------------------------------------------------------
+mkdir -p /opt/backbone-infa/sites
+for site in coming-soon blog; do
+  if [[ -d "./sites/${site}" ]]; then
+    mkdir -p "/opt/backbone-infa/sites/${site}"
+    rsync -a --delete "./sites/${site}/" "/opt/backbone-infa/sites/${site}/"
+  fi
+done
+
+# -----------------------------------------------------------------------------
 # ⚙️ Environment setup
 # -----------------------------------------------------------------------------
 if [[ ! -f ".env" ]]; then
@@ -187,13 +241,15 @@ docker compose up -d
 echo "⏳ Waiting for containers to start..."
 for service in "${SERVICES[@]}"; do
   printf "   ⏳ Waiting for %s ..." "$service"
-  for i in {1..30}; do
+  attempt=1
+  while (( attempt <= 30 )); do
     STATUS=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$service" 2>/dev/null || echo "starting")
     if [[ "$STATUS" == "healthy" || "$STATUS" == "running" ]]; then
       echo " ✅"
       break
     fi
     sleep 5
+    ((attempt++))
   done
 done
 
@@ -242,3 +298,13 @@ echo "🔒 Firewall:"
 ufw status verbose | grep -E 'Status|22|80|443|6379|5432|3000' || true
 echo
 echo "🎉 All done — your Backbone environment for ${ROOT_DOMAIN} is fully deployed, secured, and ready!"
+
+if [[ -n "${BACKUP_PASSPHRASE:-}" ]]; then
+  echo "🗃️ Installing automated encrypted Umami backups..."
+  BACKUP_DIR="${BACKUP_DIR:-/opt/backbone-infa/backups/umami}" \
+  RETENTION_DAYS="${RETENTION_DAYS:-14}" \
+  CRON_SCHEDULE="${CRON_SCHEDULE:-17 3 * * *}" \
+  BACKUP_PASSPHRASE="${BACKUP_PASSPHRASE}" \
+  RUN_NOW="${RUN_BACKUP_NOW:-false}" \
+  bash "${TARGET_DIR}/scripts/install-umami-backup-cron.sh"
+fi

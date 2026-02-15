@@ -29,13 +29,31 @@ if [[ -z "${DO_TOKEN:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "${SSH_KEY_FINGERPRINT:-}" ]]; then
-  echo "❌ SSH_KEY_FINGERPRINT not set in $ENV_FILE"
-  exit 1
+export TF_VAR_do_token="$DO_TOKEN"
+
+# Optional: use an existing uploaded DigitalOcean SSH key fingerprint.
+if [[ -n "${SSH_KEY_FINGERPRINT:-}" ]]; then
+  normalized_fingerprint="$SSH_KEY_FINGERPRINT"
+  if [[ "$normalized_fingerprint" =~ MD5:([0-9a-fA-F:]{47}) ]]; then
+    normalized_fingerprint="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$normalized_fingerprint" =~ ^[0-9a-fA-F:]{47}$ ]]; then
+    normalized_fingerprint="$(printf '%s' "$normalized_fingerprint" | tr '[:upper:]' '[:lower:]')"
+    export TF_VAR_ssh_key_fingerprint="$normalized_fingerprint"
+  else
+    echo "❌ SSH_KEY_FINGERPRINT format invalid. Expected aa:bb:... (32 hex bytes, colon-separated)."
+    exit 1
+  fi
 fi
 
-export TF_VAR_do_token="$DO_TOKEN"
-export TF_VAR_ssh_key_fingerprint="$SSH_KEY_FINGERPRINT"
+# Optional overrides if you don't want default ~/.ssh/id_ed25519.pub behavior.
+if [[ -n "${SSH_PUBLIC_KEY_PATH:-}" ]]; then
+  export TF_VAR_ssh_public_key_path="$SSH_PUBLIC_KEY_PATH"
+fi
+
+if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
+  export TF_VAR_ssh_public_key="$SSH_PUBLIC_KEY"
+fi
 
 # --- TERRAFORM COMMAND HANDLER ---
 ACTION=${1:-plan}

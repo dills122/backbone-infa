@@ -6,8 +6,9 @@ variable "do_token" {
 }
 
 variable "ssh_key_fingerprint" {
-  description = "Fingerprint of the public SSH key already uploaded to DigitalOcean."
+  description = "Optional fingerprint of an SSH key already uploaded to DigitalOcean. If empty, Terraform can create a key from ssh_public_key."
   type        = string
+  default     = ""
 }
 
 variable "ssh_public_key_path" {
@@ -20,6 +21,12 @@ variable "ssh_public_key" {
   description = "Optional raw SSH public key content; leave empty to read from ssh_public_key_path."
   type        = string
   default     = ""
+}
+
+variable "manage_ssh_key_in_digitalocean" {
+  description = "When true and ssh_key_fingerprint is empty, create a DigitalOcean SSH key from ssh_public_key/ssh_public_key_path."
+  type        = bool
+  default     = true
 }
 
 variable "region" {
@@ -74,4 +81,10 @@ variable "timezone" {
   description = "System timezone to apply on the droplet."
   type        = string
   default     = "UTC"
+}
+
+variable "ssh_allowed_cidrs" {
+  description = "CIDR blocks allowed to SSH to the droplet (port 22)."
+  type        = list(string)
+  default     = ["0.0.0.0/0", "::/0"]
 }
