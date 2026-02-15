@@ -2,7 +2,7 @@
 # Backbone stack: Caddy reverse proxy with services
 services:
   caddy:
-    image: caddy:2.7-alpine
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
     container_name: backbone-caddy
     restart: unless-stopped
     env_file:
