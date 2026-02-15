@@ -2,7 +2,7 @@
 # Backbone stack: Caddy reverse proxy with services
 services:
   caddy:
-    image: caddy:2.7-alpine
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
     container_name: backbone-caddy
     restart: unless-stopped
     env_file:
@@ -16,6 +16,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites.d:/etc/caddy/sites.d:ro
+      - /opt/backbone-infa/sites:/srv/sites:ro
     networks:
       - backbone
 
@@ -31,15 +33,22 @@ services:
       POSTGRES_DB: umami
     volumes:
       - umami_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     networks:
       - backbone
 
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    image: ${UMAMI_IMAGE:-ghcr.io/umami-software/umami:postgresql-latest}
     container_name: backbone-umami
     restart: unless-stopped
     depends_on:
-      - umami-db
+      umami-db:
+        condition: service_healthy
     env_file:
       - ./.env
     environment:
@@ -47,24 +56,6 @@ services:
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASS:?set in .env}@umami-db:5432/umami
       APP_SECRET: ${UMAMI_APP_SECRET:?set in .env}
       BASE_URL: https://umami.dsteele.dev
-    networks:
-      - backbone
-
-  coming-soon:
-    image: nginx:alpine
-    container_name: backbone-coming-soon
-    restart: unless-stopped
-    volumes:
-      - ./sites/coming-soon:/usr/share/nginx/html:ro
-    networks:
-      - backbone
-
-  blog:
-    image: nginx:alpine
-    container_name: backbone-blog
-    restart: unless-stopped
-    volumes:
-      - ./sites/blog:/usr/share/nginx/html:ro
     networks:
       - backbone
 

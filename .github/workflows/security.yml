@@ -1,0 +1,52 @@
+name: security
+
+"on":
+  pull_request:
+    paths:
+      - "docker/**"
+      - "scripts/**"
+      - ".github/workflows/security.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docker/**"
+      - "scripts/**"
+      - ".github/workflows/security.yml"
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare compose env
+        run: cp docker/.env.example docker/.env
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/trivy.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Scan repository filesystem (CRITICAL)
+        run: trivy fs --severity CRITICAL --ignore-unfixed --exit-code 1 .
+
+      - name: Scan compose images (CRITICAL)
+        run: |
+          images="$(docker compose -f docker/docker-compose.yml --env-file docker/.env config | awk '/image:/ {print $2}' | sort -u)"
+          for image in $images; do
+            echo "Pulling $image"
+            docker pull "$image"
+            digest="$(docker image inspect --format='{{index .RepoDigests 0}}' "$image" 2>/dev/null || echo 'digest-unavailable')"
+            echo "Scanning $image"
+            echo "Digest: $digest"
+            trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 "$image"
+          done

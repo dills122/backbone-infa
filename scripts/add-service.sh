@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TEMPLATE_DIR="${REPO_ROOT}/templates/service-template"
 SERVICES_DIR="${REPO_ROOT}/services"
-CADDY_SITES_DIR="${REPO_ROOT}/docker/sites"
+CADDY_SITES_DIR="${REPO_ROOT}/docker/sites.d"
 
 usage() {
   cat <<'USAGE'
@@ -101,11 +101,11 @@ Generated snippets for service '${SERVICE_NAME}':
 
 Next steps:
   1. Append ${COMPOSE_OUTPUT} inside the services block of docker/docker-compose.yml.
-  2. Review ${CADDY_OUTPUT}; it will be imported automatically by docker/Caddyfile.
-  3. Add these environment keys to your .env:
+  2. Review ${CADDY_OUTPUT}; it will be imported automatically from docker/sites.d/*.caddy.
+  3. Add these environment keys to docker/.env:
        ${SERVICE_ENV_PREFIX}_IMAGE=<container image>
        ${SERVICE_ENV_PREFIX}_DOMAIN=${SERVICE_DOMAIN}
        ${SERVICE_ENV_PREFIX}_PORT=${SERVICE_PORT}
-  4. Validate configuration: docker compose -f docker/docker-compose.yml config
-  5. Deploy: docker compose up -d
+  4. Validate configuration: docker compose -f docker/docker-compose.yml --env-file docker/.env config
+  5. Deploy: docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 EOF

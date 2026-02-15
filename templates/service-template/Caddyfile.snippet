@@ -1,4 +1,4 @@
-# Updated: Caddy site snippet generated per service; place into docker/sites/NAME.caddy.
+# Updated: Caddy site snippet generated per service; place into docker/sites.d/NAME.caddy.
 # Domain: __SERVICE_DOMAIN__
 {$__SERVICE_ENV_PREFIX___DOMAIN} {
   reverse_proxy __SERVICE_NAME__:__SERVICE_INTERNAL_PORT__

@@ -6,13 +6,15 @@
 # Root domain
 dsteele.dev {
   encode gzip zstd
-  reverse_proxy backbone-coming-soon:80
+  root * /srv/sites/coming-soon
+  file_server
 }
 
 # Blog subdomain
 blog.dsteele.dev {
   encode gzip zstd
-  reverse_proxy backbone-blog:80
+  root * /srv/sites/blog
+  file_server
 }
 
 # Umami analytics
@@ -20,3 +22,6 @@ umami.dsteele.dev {
   encode gzip zstd
   reverse_proxy backbone-umami:3000
 }
+
+# Additional service/site routes.
+import /etc/caddy/sites.d/*.caddy
