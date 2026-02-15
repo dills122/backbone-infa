@@ -25,6 +25,7 @@ UMAMI_ADMIN_EMAIL="${UMAMI_ADMIN_EMAIL:-admin@example.com}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-example.com}"
 BLOG_DOMAIN="blog.${ROOT_DOMAIN}"
 UMAMI_DOMAIN="umami.${ROOT_DOMAIN}"
+DISABLE_ROOT_SSH="${DISABLE_ROOT_SSH:-false}"
 
 # Services to monitor for health checks
 SERVICES=("backbone-caddy" "backbone-umami" "backbone-umami-db")
@@ -213,7 +214,12 @@ if [[ -f "$SSHD_CONFIG" ]]; then
     fi
   }
 
-  ensure_sshd_setting "PermitRootLogin" "no"
+  if [[ "$DISABLE_ROOT_SSH" == "true" ]]; then
+    ensure_sshd_setting "PermitRootLogin" "no"
+    echo "✅ Root SSH login disabled (DISABLE_ROOT_SSH=true)."
+  else
+    echo "ℹ️  Leaving root SSH login enabled (set DISABLE_ROOT_SSH=true to disable)."
+  fi
   ensure_sshd_setting "PasswordAuthentication" "no"
   ensure_sshd_setting "KbdInteractiveAuthentication" "no"
   ensure_sshd_setting "ChallengeResponseAuthentication" "no"

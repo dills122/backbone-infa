@@ -81,9 +81,6 @@ Optional useful vars:
 ```bash
 export TF_VAR_caddy_admin_email="ops@example.com"
 export TF_VAR_ssh_allowed_cidrs='["0.0.0.0/0","::/0"]'
-export TF_VAR_manage_dns_records=true
-export TF_VAR_domain_name="dsteele.dev"
-export TF_VAR_dns_ttl=300
 ```
 
 SSH key behavior:
@@ -93,7 +90,9 @@ SSH key behavior:
 
 DNS behavior:
 
-- If `manage_dns_records=true` and `domain_name` is set, Terraform manages `@`, `www`, `blog`, and `umami` A records pointing at the droplet IP.
+- DNS automation is disabled by default in `scripts/tf-plan.sh`.
+- To opt in, set `ENABLE_TERRAFORM_DNS_AUTOMATION=true` and provide DNS vars in your root `.env`.
+- If enabled with `manage_dns_records=true` and `domain_name` set, Terraform manages `@`, `www`, `blog`, and `umami` A records pointing at the droplet IP.
 - The domain zone must already exist in DigitalOcean DNS.
 
 Plan/apply:
@@ -265,7 +264,7 @@ Optional env overrides:
 - UFW defaults + explicit `OpenSSH`, `80/tcp`, `443/tcp`
 - `ufw limit OpenSSH`
 - SSH hardening:
-  - `PermitRootLogin no`
+  - `PermitRootLogin no` only when setup is run with `DISABLE_ROOT_SSH=true`
   - `PasswordAuthentication no`
   - `KbdInteractiveAuthentication no`
   - `ChallengeResponseAuthentication no`
