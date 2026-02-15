@@ -28,3 +28,16 @@ output "effective_ssh_key_fingerprint" {
   description = "SSH key fingerprint used by the droplet."
   value       = local.effective_ssh_keys[0]
 }
+
+output "managed_dns_records" {
+  description = "Managed DNS A records and their target value."
+  value = {
+    for key, record in digitalocean_record.backbone_a_records :
+    key => {
+      fqdn  = record.fqdn
+      type  = record.type
+      value = record.value
+      ttl   = record.ttl
+    }
+  }
+}

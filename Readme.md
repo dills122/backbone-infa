@@ -13,6 +13,7 @@ Terraform provisions the droplet and firewall. `cloud-init.sh` bootstraps the ho
 - Terraform:
   - Creates one droplet (`digitalocean_droplet.backbone_server_1`)
   - Creates one cloud firewall (`digitalocean_firewall.backbone_server_1`)
+  - Optionally manages DNS A records (`digitalocean_record.backbone_a_records`)
   - Injects `cloud-init.sh` as droplet `user_data`
 - Host bootstrap:
   - Installs Docker + Compose plugin
@@ -62,9 +63,9 @@ setup-backbone.sh
 
 - Terraform `>= 1.5`
 - DigitalOcean API token
-- DigitalOcean uploaded SSH key fingerprint
-- SSH public key available locally (default: `~/.ssh/id_ed25519.pub`)
+- SSH public key available locally (default: `~/.ssh/id_ed25519.pub`) or an existing DigitalOcean SSH key fingerprint
 - Docker CLI + Compose plugin (for local validation/remote operations)
+- Domain zone hosted in DigitalOcean DNS if you enable Terraform DNS automation
 
 ## Terraform Setup
 
@@ -72,7 +73,6 @@ Set required Terraform vars:
 
 ```bash
 export TF_VAR_do_token="<digitalocean-token>"
-export TF_VAR_ssh_key_fingerprint="<ssh-key-fingerprint>"
 ```
 
 Optional useful vars:
@@ -80,7 +80,19 @@ Optional useful vars:
 ```bash
 export TF_VAR_caddy_admin_email="ops@example.com"
 export TF_VAR_ssh_allowed_cidrs='["0.0.0.0/0","::/0"]'
+export TF_VAR_manage_dns_records=true
+export TF_VAR_domain_name="dsteele.dev"
 ```
+
+SSH key behavior:
+
+- If `TF_VAR_ssh_key_fingerprint` is set, Terraform uses that existing DO key.
+- If it is empty, Terraform can create/use a DigitalOcean SSH key from `ssh_public_key`/`ssh_public_key_path`.
+
+DNS behavior:
+
+- If `manage_dns_records=true` and `domain_name` is set, Terraform manages `@`, `blog`, and `umami` A records pointing at the droplet IP.
+- The domain zone must already exist in DigitalOcean DNS.
 
 Plan/apply:
 
@@ -100,8 +112,10 @@ Key outputs:
 
 - `droplet_ip`
 - `ssh_command`
+- `ssh_command_ubuntu`
 - `docker_host`
 - `firewall_id`
+- `managed_dns_records`
 
 ## Runtime Environment Files
 

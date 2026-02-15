@@ -38,6 +38,73 @@ BLOCKED_PORTS=(6379 5432 3000)
 
 echo "🚀 Starting backbone-infa setup for ${ROOT_DOMAIN}..."
 
+ensure_ubuntu_ssh_access() {
+  local ubuntu_user="ubuntu"
+  local source_user="${SUDO_USER:-root}"
+  local source_auth
+  local ubuntu_home
+  local ubuntu_auth
+
+  if [[ "$source_user" == "root" ]]; then
+    source_auth="/root/.ssh/authorized_keys"
+  else
+    source_auth="/home/${source_user}/.ssh/authorized_keys"
+  fi
+
+  if ! id "$ubuntu_user" >/dev/null 2>&1; then
+    echo "👤 Creating ${ubuntu_user} user for non-root SSH access..."
+    adduser --disabled-password --gecos "" "$ubuntu_user"
+  fi
+  usermod -aG sudo "$ubuntu_user" || true
+
+  ubuntu_home="$(getent passwd "$ubuntu_user" | cut -d: -f6)"
+  if [[ -z "$ubuntu_home" ]]; then
+    echo "❌ Could not determine home directory for ${ubuntu_user}."
+    exit 1
+  fi
+
+  install -d -m 700 -o "$ubuntu_user" -g "$ubuntu_user" "${ubuntu_home}/.ssh"
+  ubuntu_auth="${ubuntu_home}/.ssh/authorized_keys"
+  touch "$ubuntu_auth"
+  chmod 600 "$ubuntu_auth"
+  chown "$ubuntu_user:$ubuntu_user" "$ubuntu_auth"
+
+  if [[ -s "$source_auth" ]]; then
+    while IFS= read -r keyline; do
+      [[ -z "$keyline" ]] && continue
+      if ! grep -Fxq "$keyline" "$ubuntu_auth"; then
+        echo "$keyline" >>"$ubuntu_auth"
+      fi
+    done <"$source_auth"
+  else
+    echo "⚠️  No source authorized_keys found at ${source_auth}; cannot copy current access key."
+  fi
+
+  if ! grep -Eq '^(ssh-(ed25519|rsa)|ecdsa-sha2-)' "$ubuntu_auth"; then
+    echo "❌ ${ubuntu_auth} has no valid SSH public keys."
+    echo "    Add a key for ${ubuntu_user} before SSH hardening to avoid lockout."
+    exit 1
+  fi
+
+  echo "✅ Verified ${ubuntu_user} has SSH key-based access configured."
+}
+
+apply_ufw_docker_rules() {
+  if ! command -v ufw-docker >/dev/null 2>&1; then
+    echo "⚠️  ufw-docker not installed; skipping Docker-specific firewall rules."
+    return
+  fi
+
+  echo "🔗 Applying ufw-docker rules for backbone-caddy..."
+  if docker ps --format '{{.Names}}' | grep -q 'backbone-caddy'; then
+    ufw-docker allow backbone-caddy 80 || true
+    ufw-docker allow backbone-caddy 443 || true
+    echo "✅ ufw-docker rules applied for backbone-caddy (HTTP/HTTPS)"
+  else
+    echo "⚠️  backbone-caddy not running yet — rules will be re-applied after startup."
+  fi
+}
+
 # --- Safety check: ports 80/443 free ---
 if lsof -i :80 -sTCP:LISTEN >/dev/null 2>&1 || lsof -i :443 -sTCP:LISTEN >/dev/null 2>&1; then
   echo "⚠️  Port 80/443 already in use. Stop existing web services before running this setup."
@@ -102,20 +169,15 @@ if ! command -v ufw-docker >/dev/null 2>&1; then
 fi
 
 # ✅ Re-link Docker Caddy ports through ufw-docker
-echo "🔗 Applying ufw-docker rules for backbone-caddy..."
-if docker ps --format '{{.Names}}' | grep -q 'backbone-caddy'; then
-  ufw-docker allow backbone-caddy 80 || true
-  ufw-docker allow backbone-caddy 443 || true
-  echo "✅ ufw-docker rules applied for backbone-caddy (HTTP/HTTPS)"
-else
-  echo "⚠️  backbone-caddy not running yet — rules will apply after first startup."
-fi
+apply_ufw_docker_rules
 
 echo "✅ Firewall configured. Only ports 22, 80, and 443 are publicly accessible."
 
 # -----------------------------------------------------------------------------
 # 🔐 SSH hardening + fail2ban
 # -----------------------------------------------------------------------------
+ensure_ubuntu_ssh_access
+
 echo "🔐 Applying SSH hardening..."
 SSHD_CONFIG="/etc/ssh/sshd_config"
 if [[ -f "$SSHD_CONFIG" ]]; then
@@ -160,13 +222,16 @@ fi
 echo "🌐 Checking DNS records..."
 PUBLIC_IP=$(curl -s https://api.ipify.org)
 DOMAINS=("$ROOT_DOMAIN" "$BLOG_DOMAIN" "$UMAMI_DOMAIN")
+DNS_READY=true
 
 for domain in "${DOMAINS[@]}"; do
   DNS_IP=$(dig +short "$domain" | tail -n1)
   if [[ -z "$DNS_IP" ]]; then
     echo "⚠️  DNS for $domain not found — certificates may fail until DNS propagates."
+    DNS_READY=false
   elif [[ "$DNS_IP" != "$PUBLIC_IP" ]]; then
     echo "⚠️  DNS for $domain points to $DNS_IP (expected $PUBLIC_IP)."
+    DNS_READY=false
   else
     echo "✅  DNS for $domain correctly points to this server."
   fi
@@ -235,6 +300,9 @@ docker compose pull
 echo "🚀 Starting Docker stack..."
 docker compose up -d
 
+# Re-apply ufw-docker rules now that containers are up.
+apply_ufw_docker_rules
+
 # -----------------------------------------------------------------------------
 # ⏳ Wait for containers to start
 # -----------------------------------------------------------------------------
@@ -257,22 +325,26 @@ done
 # 📡 Verify HTTPS endpoints
 # -----------------------------------------------------------------------------
 echo "🔍 Verifying HTTPS connections..."
-for domain in "${DOMAINS[@]}"; do
-  echo -n " → Testing https://$domain ..."
-  success=false
-  for attempt in {1..5}; do
-    if curl -fsS --max-time 15 "https://$domain" >/dev/null 2>&1; then
-      echo " ✅ OK"
-      success=true
-      break
+if [[ "$DNS_READY" == true ]]; then
+  for domain in "${DOMAINS[@]}"; do
+    echo -n " → Testing https://$domain ..."
+    success=false
+    for attempt in {1..5}; do
+      if curl -fsS --max-time 15 "https://$domain" >/dev/null 2>&1; then
+        echo " ✅ OK"
+        success=true
+        break
+      fi
+      echo -n "."
+      sleep 5
+    done
+    if [[ "$success" == false ]]; then
+      echo " ❌ Failed after ${attempt:-5} attempts (check DNS or cert)"
     fi
-    echo -n "."
-    sleep 5
   done
-  if [[ "$success" == false ]]; then
-    echo " ❌ Failed after ${attempt:-5} attempts (check DNS or cert)"
-  fi
-done
+else
+  echo "⚠️ Skipping HTTPS verification because one or more domains do not currently resolve to this droplet."
+fi
 
 # -----------------------------------------------------------------------------
 # 🔑 Umami credentials

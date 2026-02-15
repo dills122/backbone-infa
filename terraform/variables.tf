@@ -88,3 +88,39 @@ variable "ssh_allowed_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0", "::/0"]
 }
+
+variable "manage_dns_records" {
+  description = "When true, manage A records in DigitalOcean DNS for this droplet."
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "DigitalOcean-managed domain zone name (example: dsteele.dev). Required when manage_dns_records is true."
+  type        = string
+  default     = ""
+}
+
+variable "dns_ttl" {
+  description = "TTL for managed DNS A records."
+  type        = number
+  default     = 300
+}
+
+variable "root_record_name" {
+  description = "Record name for the apex/root domain."
+  type        = string
+  default     = "@"
+}
+
+variable "blog_record_name" {
+  description = "Record name for the blog subdomain."
+  type        = string
+  default     = "blog"
+}
+
+variable "umami_record_name" {
+  description = "Record name for the Umami subdomain."
+  type        = string
+  default     = "umami"
+}

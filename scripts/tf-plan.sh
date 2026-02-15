@@ -13,7 +13,7 @@ ENV_FILE=".env"
 # --- CHECK ENV FILE ---
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "❌ Error: $ENV_FILE not found in $(pwd)"
-  echo "Please create it with DO_TOKEN and SSH_KEY_FINGERPRINT values."
+  echo "Please create it with DO_TOKEN (and optional SSH/DNS overrides)."
   exit 1
 fi
 
@@ -53,6 +53,15 @@ fi
 
 if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
   export TF_VAR_ssh_public_key="$SSH_PUBLIC_KEY"
+fi
+
+# Optional DNS management variables.
+if [[ -n "${DOMAIN_NAME:-}" ]]; then
+  export TF_VAR_domain_name="$DOMAIN_NAME"
+fi
+
+if [[ -n "${MANAGE_DNS_RECORDS:-}" ]]; then
+  export TF_VAR_manage_dns_records="$MANAGE_DNS_RECORDS"
 fi
 
 # --- TERRAFORM COMMAND HANDLER ---

@@ -22,6 +22,11 @@ locals {
     ] : [
     digitalocean_ssh_key.backbone_provisioning[0].fingerprint
   ]
+  dns_records = var.manage_dns_records && trimspace(var.domain_name) != "" ? {
+    root  = var.root_record_name
+    blog  = var.blog_record_name
+    umami = var.umami_record_name
+  } : {}
 }
 
 resource "digitalocean_ssh_key" "backbone_provisioning" {
@@ -88,4 +93,14 @@ resource "digitalocean_firewall" "backbone_server_1" {
     protocol              = "icmp"
     destination_addresses = ["0.0.0.0/0", "::/0"]
   }
+}
+
+resource "digitalocean_record" "backbone_a_records" {
+  for_each = local.dns_records
+
+  domain = var.domain_name
+  type   = "A"
+  name   = each.value
+  value  = digitalocean_droplet.backbone_server_1.ipv4_address
+  ttl    = var.dns_ttl
 }
