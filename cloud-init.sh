@@ -138,8 +138,8 @@ ensure_ssh_hardening() {
   ensure_sshd_setting() {
     local key="$1"
     local value="$2"
-    if grep -Eq "^[#[:space:]]*$key[[:space:]]+" "$sshd_config"; then
-      sed -i -E "s|^[#[:space:]]*$key[[:space:]]+.*|$key $value|g" "$sshd_config"
+    if grep -Eq "^[#[:space:]]*${key}[[:space:]]+" "$sshd_config"; then
+      sed -i -E "s|^[#[:space:]]*${key}[[:space:]]+.*|${key} ${value}|g" "$sshd_config"
     else
       printf '%s %s\n' "$key" "$value" >>"$sshd_config"
     fi

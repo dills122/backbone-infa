@@ -14,6 +14,7 @@ docker inspect backbone-umami-db --format '{{json .State.Health}}'
 ```
 
 Also capture:
+
 - UTC timestamp of failure
 - URL used
 - Browser error message

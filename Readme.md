@@ -178,6 +178,53 @@ BACKUP_PASSPHRASE='replace-me' bash scripts/restore-umami-db.sh --file <backup-f
 - Terraform workflow: lint, shellcheck, compose config validation, terraform checks.
 - Security workflow: Trivy filesystem and image scans.
 
+## Local Hooks (Lefthook)
+
+This repo uses `lefthook` for local lint/validation before commit/push.
+
+Checks configured:
+
+- Pre-commit:
+  - `shellcheck` on shell scripts
+  - `yamllint` on YAML files
+  - `terraform fmt -check`
+  - Docker Compose config validation (`scripts/validate-compose-config.sh`)
+- Pre-push:
+  - Terraform validate (`scripts/validate-terraform.sh`)
+
+Install Node tooling:
+
+```bash
+pnpm install
+```
+
+Install required system CLIs:
+
+```bash
+brew install shellcheck yamllint terraform
+```
+
+Install hooks (also runs automatically on `pnpm install` via `prepare`):
+
+```bash
+npx lefthook install
+```
+
+Or:
+
+```bash
+lefthook install
+```
+
+Run manually:
+
+```bash
+pnpm run lint
+pnpm run validate
+lefthook run pre-commit
+lefthook run pre-push
+```
+
 ## License
 
 MIT © Dylan Steele
