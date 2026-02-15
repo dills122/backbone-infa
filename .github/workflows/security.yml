@@ -43,6 +43,10 @@ jobs:
         run: |
           images="$(docker compose -f docker/docker-compose.yml --env-file docker/.env config | awk '/image:/ {print $2}' | sort -u)"
           for image in $images; do
+            echo "Pulling $image"
+            docker pull "$image"
+            digest="$(docker image inspect --format='{{index .RepoDigests 0}}' "$image" 2>/dev/null || echo 'digest-unavailable')"
             echo "Scanning $image"
+            echo "Digest: $digest"
             trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 "$image"
           done
