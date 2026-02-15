@@ -22,8 +22,8 @@ Terraform provisions the droplet and firewall. `cloud-init.sh` bootstraps the ho
   - Clones repo to `/opt/backbone-infa`
 - Runtime stack (`docker/docker-compose.yml`):
   - `caddy`
-  - `umami-db` (Postgres)
-  - `umami`
+  - `umami-db` (Postgres, healthchecked with `pg_isready`)
+  - `umami` (starts after `umami-db` is healthy)
 - Caddy routing:
   - Base routes in `docker/Caddyfile`
   - Additional routes imported from `docker/sites.d/*.caddy`
@@ -50,6 +50,8 @@ scripts/
   restore-umami-db.sh
   install-umami-backup-cron.sh
   tf-plan.sh
+  check-dns.sh
+  check-acme-readiness.sh
 
 templates/service-template/
   docker-compose.snippet.yml
@@ -57,6 +59,7 @@ templates/service-template/
 
 cloud-init.sh
 setup-backbone.sh
+UMAMI_LOGIN_RUNBOOK.md
 .env.example
 ```
 
@@ -286,18 +289,46 @@ Optional env overrides:
 
 ## Troubleshooting
 
-- Caddy not running:
-  - Check `/var/log/backbone-bootstrap.log`
-  - `docker compose -f docker/docker-compose.yml --env-file docker/.env ps`
-- TLS issues:
-  - Confirm DNS points to `droplet_ip`
-  - Confirm ports `80` and `443` open on DO firewall and UFW
-  - Check Caddy logs
-- Umami unavailable after update:
-  - Re-run `scripts/update-umami.sh` and inspect rollback messages
-- Terraform validate failing locally with provider plugin errors:
-  - Re-run `terraform -chdir=terraform init -upgrade`
-  - Verify local provider binary compatibility
+### Core service status
+
+- Check stack state:
+  - `docker compose -f /opt/backbone-infa/docker/docker-compose.yml --env-file /opt/backbone-infa/docker/.env ps`
+- Check Caddy/Umami logs:
+  - `docker compose -f /opt/backbone-infa/docker/docker-compose.yml --env-file /opt/backbone-infa/docker/.env logs --tail=200 caddy umami umami-db`
+
+### DNS and TLS (most common failure mode)
+
+- Run full DNS visibility check from local machine:
+  - `bash scripts/check-dns.sh dsteele.dev 45.55.234.244`
+- Run ACME-readiness check on droplet:
+  - `bash /root/check-acme-readiness.sh dsteele.dev 45.55.234.244`
+- If DNS is fully converged, restart caddy once:
+  - `docker compose -f /opt/backbone-infa/docker/docker-compose.yml --env-file /opt/backbone-infa/docker/.env restart caddy`
+
+### When DNS appears correct in UI but certs still fail
+
+- Query authoritative nameservers directly with non-recursive lookups:
+  - `for ns in ns1.digitalocean.com ns2.digitalocean.com ns3.digitalocean.com; do echo "=== $ns ==="; dig +norecurse +noall +answer @"$ns" dsteele.dev A; dig +norecurse +noall +answer @"$ns" blog.dsteele.dev A; dig +norecurse +noall +answer @"$ns" umami.dsteele.dev A; done`
+- If any nameserver returns an old IP, ACME may validate against the wrong host and fail.
+- If macOS is stale locally, flush cache:
+  - `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`
+
+### Let's Encrypt rate limiting
+
+- If caddy logs contain `HTTP 429 ... rateLimited`, wait until the exact retry timestamp in logs.
+- Do not repeatedly restart caddy before that timestamp.
+
+### Umami login failures
+
+- Use `/Users/dsteele/repos/backbone-infa/UMAMI_LOGIN_RUNBOOK.md` for the exact data-capture and recovery sequence.
+- Quick recovery (non-destructive):
+  - `docker compose -f /opt/backbone-infa/docker/docker-compose.yml --env-file /opt/backbone-infa/docker/.env restart umami`
+
+### Terraform local plugin issue on macOS
+
+- If `terraform validate` fails with provider schema/plugin handshake errors:
+  - `terraform -chdir=terraform init -upgrade`
+  - Verify provider binary architecture/dylib compatibility with your local machine.
 
 ## License
 
